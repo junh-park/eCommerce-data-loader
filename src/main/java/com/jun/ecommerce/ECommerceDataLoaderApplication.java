@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Stream;
 
 import javax.annotation.PostConstruct;
@@ -25,8 +26,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 
 import com.jun.ecommerce.connection.DataStaxAstraProperties;
+import com.jun.ecommerce.data.ProductByCategoryRepository;
 import com.jun.ecommerce.data.ProductRepository;
 import com.jun.ecommerce.domain.Product;
+import com.jun.ecommerce.domain.ProductByCategory;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,6 +40,9 @@ public class ECommerceDataLoaderApplication {
 	
 	@Autowired
 	ProductRepository productRepository;
+	
+	@Autowired
+	ProductByCategoryRepository productByCategoryRepository;
 	
 	@Value("${sampledata.location}")
 	private String sampleDataLocation;
@@ -70,7 +76,11 @@ public class ECommerceDataLoaderApplication {
 				.withFirstRecordAsHeader().parse(reader).getRecords();
 			
 			try {
-				parser.stream().forEach(record -> productMapper(record));
+				parser.stream().limit(5).forEach(record -> {
+					UUID randomUUID = UUID.randomUUID();
+					productMapper(record, randomUUID);
+					productByCategoryMapper(record, randomUUID);
+				});
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -79,8 +89,9 @@ public class ECommerceDataLoaderApplication {
 		}
 	}
 
-	private void productMapper(CSVRecord record) {
+	private void productMapper(CSVRecord record, UUID id) {
 		Product product = new Product();
+		product.setId(id);
 		product.setName(record.get("product_name"));
 		product.setCategory(record.get("product_category"));
 		product.setManufacturer(record.get("manufacturer"));
@@ -97,6 +108,27 @@ public class ECommerceDataLoaderApplication {
 		}
 		
 		productRepository.save(product);
+		System.out.println("Product saved: " + product.getName() + "\r");
+	}
+	
+	private void productByCategoryMapper(CSVRecord record, UUID id) {
+		ProductByCategory product = new ProductByCategory();
+		product.setName(record.get("product_name"));
+		product.setCategory(record.get("product_category"));
+		product.setManufacturer(record.get("manufacturer"));
+		product.setPrice(Double.parseDouble(record.get("product_price")));
+		product.setDesc(record.get("product_description"));
+		
+		String imageUrl = record.get("product_image_url");
+		int index = imageUrl.indexOf('|');
+		
+		if (index == -1) {
+			product.setImageUrl(imageUrl);
+		} else {
+			product.setImageUrl(imageUrl.substring(0,index));
+		}
+		
+		productByCategoryRepository.save(product);
 		System.out.println("Product saved: " + product.getName() + "\r");
 	}
 }
